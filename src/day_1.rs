@@ -1,26 +1,8 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 
-fn main() {
-    let lines = load_file();
-
-    let list = build_list(lines);
-
-    let (safe_reports, damped_reports): (i32, i32) =
-        list.iter().fold((0, 0), |(safe, damped), row| {
-            let (safe_row, damped_safe) = is_safe(row.clone());
-            (safe + safe_row as i32, damped + damped_safe as i32)
-        });
-
-    println!(
-        "Reports -> (Safe: {:?}, Damped: {:?})",
-        safe_reports, damped_reports
-    );
-    println!("Total Safe: {:?}", safe_reports + damped_reports);
-}
-
 fn load_file() -> Vec<String> {
-    let path = "day_2.txt";
+    let path = "input.txt";
     let file = File::open(&path).expect("Could not open file");
     io::BufReader::new(file)
         .lines()
@@ -28,67 +10,74 @@ fn load_file() -> Vec<String> {
         .collect()
 }
 
-fn build_list(lines: Vec<String>) -> Vec<Vec<i32>> {
-    let mut arr = Vec::new();
+fn build_lists(lines: Vec<String>) -> Result<(Vec<i32>, Vec<i32>), String> {
+    let mut first = Vec::new();
+    let mut second = Vec::new();
 
     for line in lines {
-        let numbers: Vec<i32> = line
-            .split_whitespace()
-            .map(|s| s.parse().expect("parse error"))
-            .collect();
-        arr.push(numbers);
+        let parts = line
+            .split_once("   ")
+            .ok_or(format!("Invalid format: {}", line))?;
+        let part1 = parts
+            .0
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| format!("Invalid number: {}", parts.0))?;
+        let part2 = parts
+            .1
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| format!("Invalid number: {}", parts.1))?;
+        first.push(part1);
+        second.push(part2);
     }
-    arr
+
+    Ok((first, second))
 }
 
-fn is_safe(row: Vec<i32>) -> (bool, bool) {
-    let (safe_by_diff, safe_by_dir) = is_row_safe(&row);
-    let all_safe = safe_by_diff && safe_by_dir;
+fn main() {
+    let lines = load_file();
 
-    if !all_safe {
-        let damped_safe = (0..row.len()).any(|i| {
-            let mut modified_row = row.clone();
-            modified_row.remove(i);
-            let (safe_diff, safe_dir) = is_row_safe(&modified_row);
-            safe_diff && safe_dir
-        });
-
-        return (false, damped_safe);
-    }
-    (true, false)
-}
-
-fn is_row_safe(row: &[i32]) -> (bool, bool) {
-    let mut safe_by_diff = true;
-    let mut safe_by_dir = true;
-    let mut dir = if row.len() > 1 {
-        row[1].cmp(&row[0]) as i32
-    } else {
-        0
+    let (mut arr1, mut arr2) = match build_lists(lines) {
+        Ok((arr1, arr2)) => (arr1, arr2),
+        Err(err) => {
+            eprintln!("Error: {}", err);
+            return;
+        }
     };
 
-    for i in 1..row.len() {
-        let diff = (row[i - 1] - row[i]).abs();
-        if diff < 1 || diff > 3 {
-            safe_by_diff = false;
-            break;
-        }
+    // part 1
+    arr1.sort();
+    arr2.sort();
 
-        match dir {
-            1 if row[i] < row[i - 1] => {
-                safe_by_dir = false;
-                break;
-            }
-            -1 if row[i] > row[i - 1] => {
-                safe_by_dir = false;
-                break;
-            }
-            0 => {
-                dir = row[i].cmp(&row[i - 1]) as i32;
-            }
-            _ => {}
-        }
-    }
+    let dist: i32 = (0..arr1.len())
+        .map(|i| (arr1[i] - arr2[i]).abs() as i32)
+        .sum();
 
-    (safe_by_diff, safe_by_dir)
+    println!("Dist: {:?}", dist);
+
+    // part 2
+    let score: usize = (0..arr1.len())
+        .map(|i| {
+            let freq = arr2.iter().filter(|&x| *x == arr1[i]).count();
+            freq * arr1[i] as usize
+        })
+        .sum();
+
+    println!("Score: {:?}", score);
+
+    // single opereation
+
+    let (dist, score): (i32, usize) = (0..arr1.len())
+        .map(|i| {
+            let diff = (arr1[i] - arr2[i]).abs() as i32;
+            let count = arr2.iter().filter(|&&x| x == arr1[i]).count() * arr1[i] as usize;
+            (diff, count)
+        })
+        .fold((0, 0), |(cum_dist, cum_score), (diff, count)| {
+            (cum_dist + diff, cum_score + count)
+        });
+
+    println!("Dist: {:?}", dist);
+    println!("Score: {:?}", score);
 }
